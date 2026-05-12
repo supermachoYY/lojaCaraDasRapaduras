@@ -1,7 +1,6 @@
-const { MercadoPago, Payment } = require('mercadopago');
+const { MercadoPagoConfig, Payment } = require('mercadopago');
 const admin = require('firebase-admin');
 
-// Inicializa Firebase Admin SDK
 if (!admin.apps.length) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -25,7 +24,7 @@ module.exports = async (req, res) => {
     return res.status(500).send('Token não configurado');
   }
 
-  const client = new MercadoPago({ accessToken });
+  const client = new MercadoPagoConfig({ accessToken });
   const paymentResource = new Payment(client);
 
   const notification = req.body;

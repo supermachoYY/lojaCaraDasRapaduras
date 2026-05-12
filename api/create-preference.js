@@ -1,6 +1,7 @@
-const { MercadoPago, Preference } = require('mercadopago');
+const { MercadoPagoConfig, Preference } = require('mercadopago');
 
 module.exports = async (req, res) => {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -18,8 +19,8 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Token não configurado' });
   }
 
-  // Inicializa o cliente do Mercado Pago (nova API)
-  const client = new MercadoPago({ accessToken });
+  const client = new MercadoPagoConfig({ accessToken });
+  const preference = new Preference(client);
 
   const { total, itens, pedidoId } = req.body;
   if (!total || !itens || !itens.length || !pedidoId) {
@@ -44,7 +45,6 @@ module.exports = async (req, res) => {
       notification_url: `https://${req.headers.host}/api/webhook`,
     };
 
-    const preference = new Preference(client);
     const response = await preference.create({ body });
     const { id, init_point, point_of_interaction } = response;
 
