@@ -1,4 +1,4 @@
-const MercadoPago = require('mercadopago');
+const { MercadoPago, Preference } = require('mercadopago');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,29 +8,26 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
   if (!accessToken) {
-    console.error('Token do Mercado Pago não configurado');
+    console.error('❌ Token do Mercado Pago não configurado');
     return res.status(500).json({ error: 'Token não configurado' });
   }
 
-  MercadoPago.configure({
-    access_token: accessToken,
-  });
+  // Inicializa o cliente do Mercado Pago (nova API)
+  const client = new MercadoPago({ accessToken });
 
   const { total, itens, pedidoId } = req.body;
-
-  if (!total || !itens || itens.length === 0 || !pedidoId) {
+  if (!total || !itens || !itens.length || !pedidoId) {
     return res.status(400).json({ error: 'Dados incompletos' });
   }
 
   try {
-    const preference = {
+    const body = {
       items: itens.map(item => ({
         title: item.nome,
         quantity: Number(item.quantidade),
@@ -47,20 +44,22 @@ module.exports = async (req, res) => {
       notification_url: `https://${req.headers.host}/api/webhook`,
     };
 
-    const response = await MercadoPago.preferences.create(preference);
-    const { init_point, point_of_interaction } = response.body;
+    const preference = new Preference(client);
+    const response = await preference.create({ body });
+    const { id, init_point, point_of_interaction } = response;
 
     const qrCodeBase64 = point_of_interaction?.transaction_data?.qr_code_base64 || null;
     const qrCodeText = point_of_interaction?.transaction_data?.qr_code || null;
 
     res.status(200).json({
+      preferenceId: id,
       init_point,
       qrCode: qrCodeBase64 ? `data:image/png;base64,${qrCodeBase64}` : null,
       qrCodeText,
       externalReference: pedidoId,
     });
   } catch (error) {
-    console.error('Erro ao criar preferência:', error);
+    console.error('❌ Erro ao criar preferência:', error);
     res.status(500).json({ error: 'Erro interno ao criar pagamento' });
   }
 };
