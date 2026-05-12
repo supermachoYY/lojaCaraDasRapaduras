@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,45 +6,31 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Image,
-  ActivityIndicator,
   ScrollView,
   Switch,
+  ActivityIndicator,
+  Image,
 } from "react-native";
-
-import { doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../database/database";
 import * as ImagePicker from "expo-image-picker";
 import Checkbox from "expo-checkbox";
 
-export default function EditarLanche({ route, navigation }: any) {
-  const { lanche } = route.params;
-
-  const [nome, setNome] = useState(lanche.nome);
-  const [preco, setPreco] = useState(String(lanche.preco));
-  const [descricao, setDescricao] = useState(lanche.descricao);
-  const [imagemUrl, setImagemUrl] = useState(lanche.imagem);
-  const [quantidadeDisponivel, setQuantidadeDisponivel] = useState(
-    String(lanche.quantidadeDisponivel || 10)
-  );
-  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>(
-    lanche.categorias || (lanche.categoria ? [lanche.categoria] : ["lanche"])
-  );
-  const [disponivel, setDisponivel] = useState(lanche.disponivel !== false);
-  const [promocao, setPromocao] = useState(lanche.promocao || false);
-  const [precoPromocional, setPrecoPromocional] = useState(
-    String(lanche.precoPromocional || "")
-  );
-  const [tempoPreparo, setTempoPreparo] = useState(
-    String(lanche.tempoPreparo || "15-25")
-  );
-  const [ingredientes, setIngredientes] = useState(
-    lanche.ingredientes?.join(", ") || ""
-  );
-  const [localRetirada, setLocalRetirada] = useState(lanche.localRetirada || "");
-  
+export default function CriarLanche({ navigation }: any) {
+  const [nome, setNome] = useState("");
+  const [preco, setPreco] = useState("");
+  const [precoPromocional, setPrecoPromocional] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [imagemUrl, setImagemUrl] = useState("");
+  const [quantidadeDisponivel, setQuantidadeDisponivel] = useState("10");
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>([]);
+  const [tempoPreparo, setTempoPreparo] = useState("15-25");
+  const [ingredientes, setIngredientes] = useState("");
+  const [promocao, setPromocao] = useState(false);
+  const [localRetirada, setLocalRetirada] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [permissaoVerificada, setPermissaoVerificada] = useState(false);
 
   const IMGBB_API_KEY = "14ec2963cb8fc44320d0674c7be38801";
 
@@ -53,6 +39,33 @@ export default function EditarLanche({ route, navigation }: any) {
     { id: "doce", label: "🍰 Doce", cor: "#FFE66D" },
     { id: "bebida", label: "🥤 Bebida", cor: "#4ECDC4" },
   ];
+
+  // 🔒 Verifica se o usuário é admin
+  useEffect(() => {
+    verificarPermissao();
+  }, []);
+
+  async function verificarPermissao() {
+    if (!auth.currentUser) {
+      navigation.replace("Login");
+      return;
+    }
+    try {
+      const userRef = doc(db, "usuarios", auth.currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      const papel = userSnap.data()?.papel;
+      if (papel !== "admin") {
+        Alert.alert("Acesso negado", "Você não tem permissão para criar lanches.");
+        navigation.goBack();
+        return;
+      }
+      setPermissaoVerificada(true);
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível verificar permissão.");
+      navigation.goBack();
+    }
+  }
 
   function toggleCategoria(catId: string) {
     setCategoriasSelecionadas(prev =>
@@ -109,7 +122,7 @@ export default function EditarLanche({ route, navigation }: any) {
         if (data.success) {
           const url = data.data.url;
           setImagemUrl(url);
-          Alert.alert("Sucesso", "Imagem atualizada com sucesso!");
+          Alert.alert("Sucesso", "Imagem carregada com sucesso!");
         } else {
           Alert.alert("Erro", "Falha ao fazer upload da imagem");
         }
@@ -122,17 +135,17 @@ export default function EditarLanche({ route, navigation }: any) {
     }
   };
 
-  async function atualizarLanche() {
+  async function salvarLanche() {
     if (!nome || !preco || !descricao) {
-      Alert.alert("Atenção", "Preencha nome, preço e descrição");
+      Alert.alert("Erro", "Preencha nome, preço e descrição");
       return;
     }
     if (parseFloat(preco) <= 0) {
-      Alert.alert("Atenção", "Preço deve ser maior que zero");
+      Alert.alert("Erro", "Preço deve ser maior que zero");
       return;
     }
-    if (parseInt(quantidadeDisponivel) < 0) {
-      Alert.alert("Atenção", "Quantidade disponível não pode ser negativa");
+    if (!auth.currentUser) {
+      Alert.alert("Erro", "Usuário não autenticado");
       return;
     }
     if (!imagemUrl) {
@@ -150,61 +163,46 @@ export default function EditarLanche({ route, navigation }: any) {
 
     setLoading(true);
     try {
-      const updateData: any = {
+      const lancheData: any = {
         nome,
         preco: parseFloat(preco),
         descricao,
         imagem: imagemUrl,
         quantidadeDisponivel: parseInt(quantidadeDisponivel),
         categorias: categoriasSelecionadas,
-        disponivel,
+        disponivel: true,
         promocao,
         tempoPreparo,
         localRetirada,
+        criadoEm: new Date(),
         atualizadoEm: new Date(),
+        userId: auth.currentUser.uid,
+        mediaAvaliacao: 0,
+        totalAvaliacoes: 0,
       };
       if (promocao && precoPromocional) {
-        updateData.precoPromocional = parseFloat(precoPromocional);
+        lancheData.precoPromocional = parseFloat(precoPromocional);
       }
       if (ingredientes) {
-        updateData.ingredientes = ingredientes.split(",").map(i => i.trim());
+        lancheData.ingredientes = ingredientes.split(",").map(i => i.trim());
       }
-      await updateDoc(doc(db, "lanches", lanche.id), updateData);
-      Alert.alert("Sucesso", "Lanche atualizado com sucesso!", [
-        { text: "OK", onPress: () => navigation.goBack() }
-      ]);
+      await addDoc(collection(db, "lanches"), lancheData);
+      Alert.alert("Sucesso!", "Lanche criado com sucesso! 🍔");
+      navigation.goBack();
     } catch (error) {
       console.log(error);
-      Alert.alert("Erro", "Não foi possível atualizar o lanche");
+      Alert.alert("Erro", "Não foi possível salvar o lanche");
     } finally {
       setLoading(false);
     }
   }
 
-  async function excluirLanche() {
-    Alert.alert(
-      "Excluir Lanche",
-      "Tem certeza que deseja excluir este lanche? Esta ação não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await deleteDoc(doc(db, "lanches", lanche.id));
-              Alert.alert("Sucesso", "Lanche excluído com sucesso!");
-              navigation.goBack();
-            } catch (error) {
-              console.log("❌ Erro ao excluir lanche:", error);
-              Alert.alert("Erro", "Não foi possível excluir o lanche. Tente novamente.");
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
+  if (!permissaoVerificada) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF6B6B" />
+        <Text>Verificando permissão...</Text>
+      </View>
     );
   }
 
@@ -214,21 +212,27 @@ export default function EditarLanche({ route, navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.titulo}>Editar Lanche</Text>
-        <TouchableOpacity onPress={excluirLanche} style={styles.deleteButton}>
-          <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
+        <Text style={styles.titulo}>Criar Lanche</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.imageSection}>
-        <Image source={{ uri: imagemUrl }} style={styles.previewImage} />
+        {imagemUrl ? (
+          <Image source={{ uri: imagemUrl }} style={styles.previewImage} />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Text style={styles.imagePlaceholderIcon}>🍔</Text>
+            <Text style={styles.imagePlaceholderText}>Nenhuma imagem selecionada</Text>
+          </View>
+        )}
         <TouchableOpacity
           style={styles.changeImageButton}
           onPress={escolherOpcaoImagem}
           disabled={uploadingImage}
         >
           <Text style={styles.changeImageText}>
-            {uploadingImage ? "⏳ Enviando..." : "📷 Trocar imagem"}
+            {uploadingImage ? "⏳ Enviando..." :
+              imagemUrl ? "🔄 Trocar imagem" : "📷 Selecionar imagem"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -236,23 +240,19 @@ export default function EditarLanche({ route, navigation }: any) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>📋 Informações Básicas</Text>
         <Text style={styles.label}>Nome do lanche *</Text>
-        <TextInput style={styles.input} value={nome} onChangeText={setNome} placeholder="Ex: X-Burger Especial" />
+        <TextInput style={styles.input} placeholder="Ex: X-Burger Especial" value={nome} onChangeText={setNome} />
         <Text style={styles.label}>Preço (R$) *</Text>
-        <TextInput style={styles.input} value={preco} onChangeText={setPreco} keyboardType="numeric" placeholder="0,00" />
+        <TextInput style={styles.input} placeholder="0,00" value={preco} onChangeText={setPreco} keyboardType="numeric" />
         <Text style={styles.label}>Descrição *</Text>
-        <TextInput style={[styles.input, styles.textArea]} value={descricao} onChangeText={setDescricao} placeholder="Descreva seu lanche..." multiline />
+        <TextInput style={[styles.input, styles.textArea]} placeholder="Descreva seu lanche..." value={descricao} onChangeText={setDescricao} multiline />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📦 Estoque e Disponibilidade</Text>
+        <Text style={styles.sectionTitle}>📦 Estoque</Text>
         <Text style={styles.label}>Quantidade disponível</Text>
-        <TextInput style={styles.input} value={quantidadeDisponivel} onChangeText={setQuantidadeDisponivel} keyboardType="numeric" placeholder="10" />
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>Lanche disponível para venda</Text>
-          <Switch value={disponivel} onValueChange={setDisponivel} trackColor={{ false: "#ddd", true: "#FF6B6B" }} />
-        </View>
+        <TextInput style={styles.input} placeholder="10" value={quantidadeDisponivel} onChangeText={setQuantidadeDisponivel} keyboardType="numeric" />
         <Text style={styles.label}>Tempo de preparo (minutos)</Text>
-        <TextInput style={styles.input} value={tempoPreparo} onChangeText={setTempoPreparo} keyboardType="numeric" placeholder="15-25" />
+        <TextInput style={styles.input} placeholder="15-25" value={tempoPreparo} onChangeText={setTempoPreparo} keyboardType="numeric" />
       </View>
 
       <View style={styles.section}>
@@ -271,7 +271,7 @@ export default function EditarLanche({ route, navigation }: any) {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>🥗 Ingredientes</Text>
-        <TextInput style={styles.input} value={ingredientes} onChangeText={setIngredientes} placeholder="Pão, hambúrguer, queijo, alface, tomate (separados por vírgula)" />
+        <TextInput style={styles.input} placeholder="Pão, hambúrguer, queijo, alface, tomate" value={ingredientes} onChangeText={setIngredientes} />
         <Text style={styles.helperText}>Separe os ingredientes por vírgula</Text>
       </View>
 
@@ -293,50 +293,43 @@ export default function EditarLanche({ route, navigation }: any) {
         {promocao && (
           <View>
             <Text style={styles.label}>Preço promocional (R$)</Text>
-            <TextInput style={styles.input} value={precoPromocional} onChangeText={setPrecoPromocional} keyboardType="numeric" placeholder="0,00" />
-            <Text style={styles.helperText}>O preço original será mostrado riscado</Text>
+            <TextInput style={styles.input} placeholder="0,00" value={precoPromocional} onChangeText={setPrecoPromocional} keyboardType="numeric" />
           </View>
         )}
       </View>
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity style={[styles.saveButton, loading && styles.disabledButton]} onPress={atualizarLanche} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>💾 Salvar Alterações</Text>}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelButtonText}>Cancelar</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={[styles.botaoSalvar, loading && styles.botaoDisabled]} onPress={salvarLanche} disabled={loading}>
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>🍔 Criar Lanche</Text>}
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f8f8f8" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#eee" },
   backButton: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
   backIcon: { fontSize: 28, color: "#FF6B6B" },
   titulo: { fontSize: 20, fontWeight: "bold", color: "#333" },
-  deleteButton: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
-  deleteButtonText: { fontSize: 24 },
   imageSection: { backgroundColor: "#fff", alignItems: "center", padding: 20, marginTop: 12 },
-  previewImage: { width: 150, height: 150, borderRadius: 15, marginBottom: 15, resizeMode: "cover" },
-  changeImageButton: { backgroundColor: "#f5f5f5", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25 },
+  previewImage: { width: 200, height: 150, borderRadius: 12, resizeMode: "cover" },
+  imagePlaceholder: { width: 200, height: 150, borderRadius: 12, backgroundColor: "#f5f5f5", justifyContent: "center", alignItems: "center" },
+  imagePlaceholderIcon: { fontSize: 40, marginBottom: 8 },
+  imagePlaceholderText: { fontSize: 12, color: "#999" },
+  changeImageButton: { backgroundColor: "#f5f5f5", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25, marginTop: 12 },
   changeImageText: { color: "#FF6B6B", fontWeight: "500" },
   section: { backgroundColor: "#fff", marginTop: 12, paddingHorizontal: 20, paddingVertical: 16 },
   sectionTitle: { fontSize: 18, fontWeight: "bold", color: "#333", marginBottom: 16 },
   label: { fontSize: 14, color: "#666", marginBottom: 8, marginTop: 12, fontWeight: "500" },
-  input: { borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12, fontSize: 16, backgroundColor: "#fff" },
+  input: { borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12, fontSize: 16, backgroundColor: "#fff", color: "#333" },
   textArea: { minHeight: 100, textAlignVertical: "top" },
   switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12 },
   switchLabel: { fontSize: 16, color: "#333" },
   checkboxRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   checkboxLabel: { fontSize: 16, marginLeft: 12, color: "#333" },
   helperText: { fontSize: 11, color: "#999", marginTop: 5 },
-  buttonContainer: { padding: 20, marginBottom: 30 },
-  saveButton: { backgroundColor: "#27ae60", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginBottom: 12 },
-  saveButtonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  cancelButton: { backgroundColor: "#f5f5f5", paddingVertical: 16, borderRadius: 12, alignItems: "center" },
-  cancelButtonText: { color: "#666", fontSize: 16 },
-  disabledButton: { opacity: 0.7 },
+  botaoSalvar: { backgroundColor: "#FF6B6B", margin: 20, paddingVertical: 16, borderRadius: 12, alignItems: "center", elevation: 3 },
+  botaoDisabled: { opacity: 0.7 },
+  botaoTexto: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 });
