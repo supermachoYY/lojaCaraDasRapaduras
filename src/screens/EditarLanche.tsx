@@ -11,7 +11,6 @@ import {
   ScrollView,
   Switch,
 } from "react-native";
-
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db, auth } from "../database/database";
 import * as ImagePicker from "expo-image-picker";
