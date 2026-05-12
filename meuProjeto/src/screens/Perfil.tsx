@@ -28,11 +28,12 @@ export default function Perfil({ navigation }: any) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [activeTab, setActiveTab] = useState("perfil");
   const [refreshing, setRefreshing] = useState(false);
-  
-  // Dados do vendedor
+
+  // Dados do vendedor (só serão carregados se for admin)
   const [meusLanches, setMeusLanches] = useState<any[]>([]);
   const [pedidosRecebidos, setPedidosRecebidos] = useState<any[]>([]);
   const [avaliacoesRecebidas, setAvaliacoesRecebidas] = useState<any[]>([]);
+  const [mediaAvaliacaoVendedor, setMediaAvaliacaoVendedor] = useState(0);
   const [graficos, setGraficos] = useState({
     pedidosHoje: 0,
     pedidosSemana: 0,
@@ -43,7 +44,9 @@ export default function Perfil({ navigation }: any) {
 
   useEffect(() => {
     carregarDadosUsuario();
-    carregarDadosVendedor();
+    if (userData.papel === "admin") {
+      carregarDadosVendedor();
+    }
   }, []);
 
   async function carregarDadosUsuario() {
@@ -95,7 +98,13 @@ export default function Perfil({ navigation }: any) {
 
       const avaliacoesQuery = query(collection(db, "avaliacoes_vendedor"), where("vendedorId", "==", auth.currentUser.uid), orderBy("criadoEm", "desc"));
       const avaliacoesSnap = await getDocs(avaliacoesQuery);
-      setAvaliacoesRecebidas(avaliacoesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const listaAvaliacoes = avaliacoesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAvaliacoesRecebidas(listaAvaliacoes);
+
+      let soma = 0;
+      listaAvaliacoes.forEach(av => { soma += av.nota; });
+      const media = listaAvaliacoes.length > 0 ? soma / listaAvaliacoes.length : 0;
+      setMediaAvaliacaoVendedor(media);
     } catch (error) {
       console.log(error);
     }
@@ -103,7 +112,10 @@ export default function Perfil({ navigation }: any) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([carregarDadosUsuario(), carregarDadosVendedor()]);
+    await carregarDadosUsuario();
+    if (userData.papel === "admin") {
+      await carregarDadosVendedor();
+    }
     setRefreshing(false);
   };
 
@@ -178,24 +190,19 @@ export default function Perfil({ navigation }: any) {
   async function limparPedidosAntigos() {
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 30);
-    
     try {
       const q = query(
         collection(db, "pedidos"),
         where("status", "in", ["finalizado", "cancelado"]),
         where("criadoEm", "<", dataLimite)
       );
-      
       const snapshot = await getDocs(q);
-      
       if (snapshot.empty) {
         Alert.alert("Info", "Não há pedidos antigos para remover.");
         return;
       }
-      
       const promises = snapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(promises);
-      
       Alert.alert("Limpeza concluída", `${snapshot.size} pedidos removidos com sucesso.`);
     } catch (error) {
       console.log(error);
@@ -209,11 +216,7 @@ export default function Perfil({ navigation }: any) {
       "Esta ação irá remover permanentemente todos os pedidos finalizados ou cancelados com mais de 30 dias.\n\nEsta operação não pode ser desfeita.",
       [
         { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Limpar", 
-          style: "destructive",
-          onPress: limparPedidosAntigos 
-        }
+        { text: "Limpar", style: "destructive", onPress: limparPedidosAntigos }
       ]
     );
   }
@@ -249,13 +252,16 @@ export default function Perfil({ navigation }: any) {
         <Text style={styles.email}>{auth.currentUser?.email}</Text>
       </View>
 
+      {/* Abas: só mostra a aba "Modo Vendedor" se for admin */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity style={[styles.tab, activeTab === "perfil" && styles.tabActive]} onPress={() => setActiveTab("perfil")}>
           <Text style={[styles.tabText, activeTab === "perfil" && styles.tabTextActive]}>Perfil</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, activeTab === "vendedor" && styles.tabActive]} onPress={() => setActiveTab("vendedor")}>
-          <Text style={[styles.tabText, activeTab === "vendedor" && styles.tabTextActive]}>👨‍🍳 Modo Vendedor</Text>
-        </TouchableOpacity>
+        {isAdmin && (
+          <TouchableOpacity style={[styles.tab, activeTab === "vendedor" && styles.tabActive]} onPress={() => setActiveTab("vendedor")}>
+            <Text style={[styles.tabText, activeTab === "vendedor" && styles.tabTextActive]}>👨‍🍳 Modo Vendedor</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#FF6B6B"]} />}>
@@ -289,11 +295,12 @@ export default function Perfil({ navigation }: any) {
               <View style={styles.statsGrid}>
                 <View style={styles.statItem}><Text style={styles.statNumber}>{pedidosRecebidos.length}</Text><Text style={styles.statLabel}>Compras realizadas</Text></View>
                 <View style={styles.statItem}><Text style={styles.statNumber}>{meusLanches.length}</Text><Text style={styles.statLabel}>Lanches anunciados</Text></View>
-                <View style={styles.statItem}><Text style={styles.statNumber}>⭐ {(userData.avaliacaoMedia || 4.5).toFixed(1)}</Text><Text style={styles.statLabel}>Avaliação média</Text></View>
+                <View style={styles.statItem}><Text style={styles.statNumber}>⭐ {mediaAvaliacaoVendedor.toFixed(1)}</Text><Text style={styles.statLabel}>Avaliação média</Text></View>
               </View>
             </View>
 
-            {meusLanches.length > 0 && (
+            {/* Botão para Painel do Vendedor: só aparece se for admin */}
+            {isAdmin && (
               <TouchableOpacity style={styles.vendorButton} onPress={() => navigation.navigate("PainelVendedor")}>
                 <Text style={styles.vendorButtonText}>👨‍🍳 Abrir Painel do Vendedor</Text>
               </TouchableOpacity>
@@ -311,7 +318,7 @@ export default function Perfil({ navigation }: any) {
           </View>
         )}
 
-        {activeTab === "vendedor" && (
+        {isAdmin && activeTab === "vendedor" && (
           <View style={styles.content}>
             {meusLanches.length === 0 ? (
               <View style={styles.emptyVendorCard}>
@@ -350,7 +357,7 @@ export default function Perfil({ navigation }: any) {
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>📦 Pedidos Recebidos</Text>
-                  {pedidosRecebidos.length === 0 ? <Text style={styles.emptyText}>Nenhum pedido recebido ainda</Text> : pedidosRecebidos.slice(0,5).map((pedido) => (
+                  {pedidosRecebidos.length === 0 ? <Text style={styles.emptyText}>Nenhum pedido recebido ainda</Text> : pedidosRecebidos.slice(0, 5).map((pedido) => (
                     <View key={pedido.id} style={styles.pedidoItem}>
                       <View style={styles.pedidoHeader}><Text style={styles.pedidoId}>Pedido #{pedido.id.slice(-6)}</Text><Text style={[styles.pedidoStatus, pedido.status === "finalizado" && styles.statusSuccess, pedido.status === "pendente" && styles.statusPending]}>{pedido.status === "finalizado" ? "✅ Finalizado" : "⏳ Pendente"}</Text></View>
                       <Text style={styles.pedidoDate}>{formatarData(pedido.criadoEm)}</Text>
@@ -361,7 +368,7 @@ export default function Perfil({ navigation }: any) {
 
                 <View style={styles.card}>
                   <Text style={styles.cardTitle}>⭐ Avaliações dos Clientes</Text>
-                  {avaliacoesRecebidas.length === 0 ? <Text style={styles.emptyText}>Nenhuma avaliação recebida ainda</Text> : avaliacoesRecebidas.slice(0,5).map((avaliacao, idx) => (
+                  {avaliacoesRecebidas.length === 0 ? <Text style={styles.emptyText}>Nenhuma avaliação recebida ainda</Text> : avaliacoesRecebidas.slice(0, 5).map((avaliacao, idx) => (
                     <View key={idx} style={styles.avaliacaoItem}>
                       <View style={styles.avaliacaoHeader}><Text style={styles.avaliacaoStars}>{"★".repeat(Math.floor(avaliacao.nota))}{"☆".repeat(5 - Math.floor(avaliacao.nota))}</Text><Text style={styles.avaliacaoNota}>{avaliacao.nota.toFixed(1)}</Text></View>
                       {avaliacao.comentario && <Text style={styles.avaliacaoComentario}>"{avaliacao.comentario}"</Text>}

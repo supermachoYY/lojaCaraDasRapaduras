@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Image,
 } from "react-native";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../database/database";
 import * as ImagePicker from "expo-image-picker";
 import Checkbox from "expo-checkbox";
@@ -30,6 +30,7 @@ export default function CriarLanche({ navigation }: any) {
   const [localRetirada, setLocalRetirada] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [permissaoVerificada, setPermissaoVerificada] = useState(false);
 
   const IMGBB_API_KEY = "14ec2963cb8fc44320d0674c7be38801";
 
@@ -38,6 +39,33 @@ export default function CriarLanche({ navigation }: any) {
     { id: "doce", label: "🍰 Doce", cor: "#FFE66D" },
     { id: "bebida", label: "🥤 Bebida", cor: "#4ECDC4" },
   ];
+
+  // 🔒 Verifica se o usuário é admin
+  useEffect(() => {
+    verificarPermissao();
+  }, []);
+
+  async function verificarPermissao() {
+    if (!auth.currentUser) {
+      navigation.replace("Login");
+      return;
+    }
+    try {
+      const userRef = doc(db, "usuarios", auth.currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      const papel = userSnap.data()?.papel;
+      if (papel !== "admin") {
+        Alert.alert("Acesso negado", "Você não tem permissão para criar lanches.");
+        navigation.goBack();
+        return;
+      }
+      setPermissaoVerificada(true);
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível verificar permissão.");
+      navigation.goBack();
+    }
+  }
 
   function toggleCategoria(catId: string) {
     setCategoriasSelecionadas(prev =>
@@ -169,6 +197,15 @@ export default function CriarLanche({ navigation }: any) {
     }
   }
 
+  if (!permissaoVerificada) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF6B6B" />
+        <Text>Verificando permissão...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
@@ -194,8 +231,8 @@ export default function CriarLanche({ navigation }: any) {
           disabled={uploadingImage}
         >
           <Text style={styles.changeImageText}>
-            {uploadingImage ? "⏳ Enviando..." : 
-             imagemUrl ? "🔄 Trocar imagem" : "📷 Selecionar imagem"}
+            {uploadingImage ? "⏳ Enviando..." :
+              imagemUrl ? "🔄 Trocar imagem" : "📷 Selecionar imagem"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -270,6 +307,7 @@ export default function CriarLanche({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f8f8f8" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#eee" },
   backButton: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
   backIcon: { fontSize: 28, color: "#FF6B6B" },

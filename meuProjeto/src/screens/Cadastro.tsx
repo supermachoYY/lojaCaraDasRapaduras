@@ -63,9 +63,9 @@ export default function Cadastro() {
         telefone,
         email,
         criadoEm: new Date(),
-        tipo: "aluno",
         pontos: 0,
         emailVerificado: false,
+        papel: "cliente",
       });
 
       Alert.alert(
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   formContainer: { backgroundColor: "#fff", borderRadius: 20, padding: 20, elevation: 3 },
   inputContainer: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e0e0e0", borderRadius: 12, marginBottom: 15, paddingHorizontal: 15, backgroundColor: "#fafafa" },
   inputIcon: { fontSize: 20, marginRight: 10 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#333" },
+  input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#333", opacity: 0.9 },
   eyeIcon: { fontSize: 20, color: "#999" },
   botao: { backgroundColor: "#FF6B6B", paddingVertical: 15, borderRadius: 12, alignItems: "center", marginTop: 10, marginBottom: 20 },
   botaoDisabled: { opacity: 0.7 },

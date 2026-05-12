@@ -124,7 +124,7 @@ export default function Login() {
             <Text style={styles.inputIcon}>📧</Text>
             <TextInput
               style={styles.input}
-              placeholder="E-mail institucional"
+              placeholder="E-mail"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   formContainer: { backgroundColor: "#fff", borderRadius: 25, padding: 20, elevation: 5 },
   inputContainer: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#e0e0e0", borderRadius: 12, marginBottom: 15, paddingHorizontal: 15, backgroundColor: "#fafafa" },
   inputIcon: { fontSize: 20, marginRight: 10 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#333" },
+  input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#333", opacity: 0.9 },
   eyeIcon: { fontSize: 20, color: "#999" },
   esqueciSenha: { alignSelf: "flex-end", marginBottom: 20 },
   esqueciSenhaText: { color: "#FF6B6B", fontSize: 13 },

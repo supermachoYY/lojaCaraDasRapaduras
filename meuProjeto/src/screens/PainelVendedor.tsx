@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  SectionList,
   StyleSheet,
   Image,
   TouchableOpacity,
@@ -10,15 +11,49 @@ import {
   RefreshControl,
   SafeAreaView,
   StatusBar,
-  ScrollView,
 } from "react-native";
 import { collection, getDocs, deleteDoc, doc, query, where } from "firebase/firestore";
 import { db, auth } from "../database/database";
+import { getDoc } from "firebase/firestore";
+
+// Se você usa EMPRESA_ID fixo, defina aqui (opcional)
+// const EMPRESA_ID = "lanchonete_cliente";
 
 export default function PainelVendedor({ navigation }: any) {
   const [lanches, setLanches] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Verifica se o usuário é admin; caso contrário, redireciona
+  useEffect(() => {
+    verificarPermissao();
+  }, []);
+
+  async function verificarPermissao() {
+    if (!auth.currentUser) {
+      navigation.replace("Login");
+      return;
+    }
+    try {
+      const userRef = doc(db, "usuarios", auth.currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      const papel = userSnap.data()?.papel;
+      if (papel !== "admin") {
+        Alert.alert("Acesso negado", "Você não tem permissão para acessar esta área.");
+        navigation.goBack();
+        return;
+      }
+      // Se for admin, carrega os lanches
+      buscarLanches();
+    } catch (error) {
+      console.log(error);
+      Alert.alert("Erro", "Não foi possível verificar permissão.");
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const buscarLanches = useCallback(async () => {
     setError(null);
@@ -29,20 +64,18 @@ export default function PainelVendedor({ navigation }: any) {
         setError("Usuário não autenticado");
         return;
       }
+      // Se estiver usando EMPRESA_ID, adicione o filtro:
+      // const q = query(collection(db, "lanches"), where("userId", "==", user.uid), where("empresaId", "==", EMPRESA_ID));
       const q = query(collection(db, "lanches"), where("userId", "==", user.uid));
       const snapshot = await getDocs(q);
       const lista = snapshot.docs.map(docItem => ({ id: docItem.id, ...docItem.data() }));
       setLanches(lista);
     } catch (err: any) {
-      console.error(err);
+      console.error("❌ Erro ao buscar lanches:", err);
       setError(err.message || "Erro desconhecido");
       Alert.alert("Erro", "Não foi possível carregar seus lanches.");
     }
   }, []);
-
-  useEffect(() => {
-    buscarLanches();
-  }, [buscarLanches]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -68,30 +101,30 @@ export default function PainelVendedor({ navigation }: any) {
     ]);
   };
 
-  // Agrupa os lanches por categoria
-  const salgados = lanches.filter(l => 
+  // Separa os lanches por categoria
+  const salgados = lanches.filter(l =>
     (l.categorias && l.categorias.includes("lanche")) || (!l.categorias && l.categoria === "lanche")
   );
-  const doces = lanches.filter(l => 
+  const doces = lanches.filter(l =>
     (l.categorias && l.categorias.includes("doce")) || (!l.categorias && l.categoria === "doce")
   );
-  const bebidas = lanches.filter(l => 
+  const bebidas = lanches.filter(l =>
     (l.categorias && l.categorias.includes("bebida")) || (!l.categorias && l.categoria === "bebida")
   );
   const promocoes = lanches.filter(l => l.promocao === true);
 
-  const categorias = [
-    { id: "salgados", titulo: "🍔 Salgados", data: salgados, cor: "#FF6B6B" },
-    { id: "doces", titulo: "🍰 Doces", data: doces, cor: "#FFE66D" },
-    { id: "bebidas", titulo: "🥤 Bebidas", data: bebidas, cor: "#4ECDC4" },
-    { id: "promocoes", titulo: "🔥 Promoções", data: promocoes, cor: "#FF9F40" },
-  ].filter(cat => cat.data.length > 0);
+  const sections = [
+    { title: "🍔 Salgados", data: salgados, color: "#FF6B6B" },
+    { title: "🍰 Doces", data: doces, color: "#FFE66D" },
+    { title: "🥤 Bebidas", data: bebidas, color: "#4ECDC4" },
+    { title: "🔥 Promoções", data: promocoes, color: "#FF9F40" },
+  ].filter(section => section.data.length > 0);
 
   const renderItem = ({ item }: any) => (
     <View style={styles.card}>
       <Image source={{ uri: item.imagem }} style={styles.imagem} />
       <View style={styles.info}>
-        <Text style={styles.nome} numberOfLines={1}>{item.nome}</Text>
+        <Text style={styles.nome}>{item.nome}</Text>
         <Text style={styles.preco}>R$ {item.preco.toFixed(2)}</Text>
         {item.promocao && (
           <View style={styles.promoTag}>
@@ -109,6 +142,23 @@ export default function PainelVendedor({ navigation }: any) {
       </View>
     </View>
   );
+
+  const renderSectionHeader = ({ section: { title, color } }: any) => (
+    <View style={[styles.sectionHeader, { backgroundColor: color + "15" }]}>
+      <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#FF6B6B" />
+          <Text>Verificando permissão...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (error) {
     return (
@@ -128,10 +178,7 @@ export default function PainelVendedor({ navigation }: any) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f8f8" />
-      <ScrollView
-        style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#FF6B6B"]} />}
-      >
+      <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backIcon}>←</Text>
@@ -164,31 +211,27 @@ export default function PainelVendedor({ navigation }: any) {
             </TouchableOpacity>
           </View>
         ) : (
-          <>
-            {categorias.map(categoria => (
-              <View key={categoria.id} style={styles.categoriaContainer}>
-                <Text style={[styles.categoriaTitulo, { color: categoria.cor }]}>
-                  {categoria.titulo}
-                </Text>
-                <FlatList
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  data={categoria.data}
-                  keyExtractor={item => item.id}
-                  renderItem={renderItem}
-                  contentContainerStyle={styles.horizontalList}
-                />
-              </View>
-            ))}
-            <TouchableOpacity style={styles.addButtonBottom} onPress={() => navigation.navigate("CriarLanche")}>
-              <Text style={styles.addButtonText}>+ Adicionar novo lanche</Text>
-            </TouchableOpacity>
-          </>
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#FF6B6B"]} />}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            ListFooterComponent={
+              <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate("CriarLanche")}>
+                <Text style={styles.addButtonText}>+ Adicionar novo lanche</Text>
+              </TouchableOpacity>
+            }
+          />
         )}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
+
+
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f8f8f8" },
