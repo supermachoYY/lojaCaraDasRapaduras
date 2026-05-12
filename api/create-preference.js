@@ -1,5 +1,80 @@
 const MercadoPago = require('mercadopago');
 
+export default async function handler(req, res) {
+  // Configura CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+  if (!accessToken) {
+    console.error('❌ Token do Mercado Pago não configurado');
+    return res.status(500).json({ error: 'Token não configurado' });
+  }
+
+  // Configura corretamente o SDK
+  MercadoPago.configure({
+    access_token: accessToken,
+  });
+
+  const { total, itens, pedidoId } = req.body;
+
+  if (!total || !itens || itens.length === 0 || !pedidoId) {
+    return res.status(400).json({ error: 'Dados incompletos' });
+  }
+
+  try {
+    const preference = {
+      items: itens.map(item => ({
+        title: item.nome,
+        quantity: Number(item.quantidade),
+        unit_price: Number(item.preco),
+        currency_id: 'BRL',
+      })),
+      back_urls: {
+        success: 'allanches://pagamento?status=approved',
+        failure: 'allanches://pagamento?status=rejected',
+        pending: 'allanches://pagamento?status=pending',
+      },
+      auto_return: 'approved',
+      external_reference: pedidoId,
+      notification_url: `https://${req.headers.host}/api/webhook`,
+    };
+
+    const response = await MercadoPago.preferences.create(preference);
+    const { id, init_point, point_of_interaction } = response.body;
+
+    const qrCodeBase64 = point_of_interaction?.transaction_data?.qr_code_base64 || null;
+    const qrCodeText = point_of_interaction?.transaction_data?.qr_code || null;
+
+    res.status(200).json({
+      preferenceId: id,
+      init_point,
+      qrCode: qrCodeBase64 ? `data:image/png;base64,${qrCodeBase64}` : null,
+      qrCodeText,
+      externalReference: pedidoId,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao criar preferência:', error);
+    res.status(500).json({ error: 'Erro interno ao criar pagamento' });
+  }
+}
+
+
+
+
+
+
+/*const { MercadoPagoConfig, Payment } = require('mercadopago');
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -8,32 +83,33 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
-  if (!accessToken) {
-    console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
-    return res.status(500).json({ error: 'Configuração do Mercado Pago ausente' });
-  }
-
-  MercadoPago.configure({ access_token: accessToken });
-
-  const { total, itens, transactionId, email } = req.body;
-
-  if (!total || total <= 0 || !itens || itens.length === 0 || !transactionId || !email) {
-    return res.status(400).json({ error: 'Dados incompletos' });
-  }
-
   try {
-    const payment = {
+    const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+    if (!accessToken) {
+      console.error('MERCADO_PAGO_ACCESS_TOKEN não configurado');
+      return res.status(500).json({ error: 'Configuração do Mercado Pago ausente' });
+    }
+
+    const client = new MercadoPagoConfig({ accessToken });
+    const paymentClient = new Payment(client);
+
+    const { total, itens, transactionId, email } = req.body;
+
+    if (!total || total <= 0 || !itens || itens.length === 0 || !transactionId || !email) {
+      return res.status(400).json({ error: 'Dados incompletos' });
+    }
+
+    const body = {
       transaction_amount: Number(total),
       description: `Pedido ${transactionId}`,
       payment_method_id: 'pix',
       payer: { email },
       external_reference: transactionId,
-      notification_url: `${process.env.VERCEL_URL || 'https://' + req.headers.host}/api/webhook`,
+      notification_url: `https://${process.env.VERCEL_URL || req.headers.host}/api/webhook`,
     };
 
-    const response = await MercadoPago.payment.create(payment);
-    const { point_of_interaction, id: paymentId } = response.body;
+    const response = await paymentClient.create({ body });
+    const { point_of_interaction, id: paymentId } = response;
     const qrCodeBase64 = point_of_interaction?.transaction_data?.qr_code_base64 || null;
     const qrCodeText = point_of_interaction?.transaction_data?.qr_code || null;
 
