@@ -1,7 +1,6 @@
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 
 module.exports = async (req, res) => {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -19,13 +18,26 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Token não configurado' });
   }
 
+  const { total, itens, pedidoId } = req.body;
+  
+  // Validação detalhada
+  if (!total) {
+    return res.status(400).json({ error: 'Campo "total" ausente' });
+  }
+  if (!itens || !Array.isArray(itens)) {
+    return res.status(400).json({ error: 'Campo "itens" ausente ou não é array' });
+  }
+  if (itens.length === 0) {
+    return res.status(400).json({ error: 'Array "itens" está vazio' });
+  }
+  if (!pedidoId) {
+    return res.status(400).json({ error: 'Campo "pedidoId" ausente' });
+  }
+
+  console.log('📦 Dados recebidos na Vercel:', { total, itens, pedidoId });
+
   const client = new MercadoPagoConfig({ accessToken });
   const preference = new Preference(client);
-
-  const { total, itens, pedidoId } = req.body;
-  if (!total || !itens || !itens.length || !pedidoId) {
-    return res.status(400).json({ error: 'Dados incompletos' });
-  }
 
   try {
     const body = {
