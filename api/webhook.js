@@ -1,7 +1,6 @@
 const admin = require('firebase-admin');
 const MercadoPago = require('mercadopago');
 
-// Inicializa o Firebase Admin SDK apenas uma vez
 if (!admin.apps.length) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -14,7 +13,7 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).send('Method not allowed');
   }
@@ -34,7 +33,6 @@ export default async function handler(req, res) {
 
   if (notification.type === 'payment') {
     const paymentId = notification.data.id;
-
     try {
       const payment = await MercadoPago.payment.findById(paymentId);
       const { status, external_reference } = payment.body;
@@ -78,7 +76,7 @@ export default async function handler(req, res) {
   }
 
   res.status(200).send('OK');
-}
+};
 
 
 /*const admin = require('firebase-admin');

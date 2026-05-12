@@ -1,7 +1,7 @@
 const MercadoPago = require('mercadopago');
 
-export default async function handler(req, res) {
-  // Configura CORS
+module.exports = async (req, res) => {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Token não configurado' });
   }
 
-  // Configura corretamente o SDK
   MercadoPago.configure({
     access_token: accessToken,
   });
@@ -66,8 +65,7 @@ export default async function handler(req, res) {
     console.error('❌ Erro ao criar preferência:', error);
     res.status(500).json({ error: 'Erro interno ao criar pagamento' });
   }
-}
-
+};
 
 
 
