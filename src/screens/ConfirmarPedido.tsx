@@ -94,8 +94,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     setUsandoPontos(!usandoPontos);
   }
 
-  // Função auxiliar para criar pedido genérico
-  async function criarPedidoNoFirestore(status: string = "pendente", transactionId?: string) {
+  async function criarPedidoNoFirestore(status: string = "pendente") {
     const pedidosPorVendedor = new Map();
     cart.forEach((item) => {
       const vendedorId = item.userId;
@@ -111,6 +110,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     const pedidosCriados = [];
     const dataRetirada = calcularDataRetirada();
     const descontoPontos = calcularDescontoPorPontos();
+    const totalComDesconto = calcularTotalComDesconto();
     const pontosGanhos = calcularPontosGanhos();
     const codigoNumerico = gerarCodigoNumerico();
 
@@ -138,7 +138,6 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         status: status,
         qrCode: idUnico,
         codigoNumerico,
-        transactionId: transactionId || null,
         avaliado: false,
         criadoEm: new Date(),
       };
@@ -154,10 +153,8 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     return pedidosCriados;
   }
 
-  // Função para pagamento PIX
   async function pagarComPIX() {
     console.log("🔥 Botão PIX clicado");
-    
     if (!auth.currentUser) {
       Alert.alert("Erro", "Usuário não autenticado");
       return;
@@ -175,12 +172,10 @@ export default function ConfirmarPedido({ route, navigation }: any) {
 
     setProcessandoPix(true);
     try {
-      const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      // Cria o pedido no Firestore com status "aguardando_pagamento"
-      const pedidosCriados = await criarPedidoNoFirestore("aguardando_pagamento", transactionId);
-      const pedidoId = pedidosCriados[0].id;
-      
-      const total = calcularTotalComDesconto(); // total com desconto de pontos
+      // Primeiro, cria o pedido no Firestore com status "aguardando_pagamento"
+      const pedidosCriados = await criarPedidoNoFirestore("aguardando_pagamento");
+      const pedidoId = pedidosCriados[0].id; // extrai o ID do primeiro pedido
+      const total = calcularTotalComDesconto();
       const itens = cart.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco: i.preco }));
       const email = auth.currentUser.email;
 
@@ -188,15 +183,14 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         throw new Error("Email do usuário não encontrado para pagamento PIX");
       }
 
-      console.log("📦 Dados enviados para a Vercel:", { total, itens, pedidoId, transactionId });
-
       const apiUrl = 'https://loja-cara-das-rapaduras.vercel.app/api/create-preference';
       console.log("Chamando API:", apiUrl);
+      console.log("Enviando para Vercel:", { total, itens, pedidoId, email });
 
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ total, itens, transactionId, email }),
+        body: JSON.stringify({ total, itens, pedidoId, email }),
       });
 
       if (!response.ok) {
@@ -212,7 +206,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         navigation.navigate('ExibirQRCode', {
           qrCode: data.qrCode,
           qrCodeText: data.qrCodeText,
-          transactionId,
+          pedidoId,
         });
       } else {
         throw new Error("Resposta da API não contém QR Code");
