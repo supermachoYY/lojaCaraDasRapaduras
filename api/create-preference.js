@@ -1,7 +1,6 @@
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 
 module.exports = async (req, res) => {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -20,19 +19,9 @@ module.exports = async (req, res) => {
   }
 
   const { total, itens, pedidoId } = req.body;
-  
-  // Validação detalhada
-  if (!total) {
-    return res.status(400).json({ error: 'Campo "total" ausente' });
+  if (!total || !itens || !itens.length || !pedidoId) {
+    return res.status(400).json({ error: 'Dados incompletos' });
   }
-  if (!itens || !Array.isArray(itens) || itens.length === 0) {
-    return res.status(400).json({ error: 'Campo "itens" inválido' });
-  }
-  if (!pedidoId) {
-    return res.status(400).json({ error: 'Campo "pedidoId" ausente' });
-  }
-
-  console.log('📦 Dados recebidos na Vercel:', JSON.stringify({ total, itens, pedidoId }, null, 2));
 
   const client = new MercadoPagoConfig({ accessToken });
   const preference = new Preference(client);
@@ -50,6 +39,10 @@ module.exports = async (req, res) => {
         excluded_payment_types: [],
         installments: 1,
       },
+      // 🔥 FORÇA O PAGAMENTO VIA PIX
+      point_of_interaction: {
+        type: 'CHECKOUT_PIX',
+      },
       back_urls: {
         success: 'allanches://pagamento?status=approved',
         failure: 'allanches://pagamento?status=rejected',
@@ -61,20 +54,19 @@ module.exports = async (req, res) => {
     };
 
     const response = await preference.create({ body });
-    console.log('✅ Resposta do Mercado Pago:', JSON.stringify(response, null, 2));
+    console.log('✅ Preferência criada:', response.id);
 
-    const { id, init_point, point_of_interaction } = response;
-    const qrCodeBase64 = point_of_interaction?.transaction_data?.qr_code_base64 || null;
-    const qrCodeText = point_of_interaction?.transaction_data?.qr_code || null;
+    // Extrai os dados do PIX (QR Code base64 e texto)
+    const qrCodeBase64 = response.point_of_interaction?.transaction_data?.qr_code_base64 || null;
+    const qrCodeText = response.point_of_interaction?.transaction_data?.qr_code || null;
 
     if (!qrCodeBase64) {
-      console.error('❌ QR Code não gerado. Verifique se o Access Token tem permissão para PIX.');
-      return res.status(500).json({ error: 'QR Code não gerado pelo Mercado Pago' });
+      console.error('❌ QR Code não gerado. Verifique se o Access Token é de PRODUÇÃO e se o PIX está ativo na conta.');
+      return res.status(500).json({ error: 'QR Code não gerado. Use Access Token de produção.' });
     }
 
     res.status(200).json({
-      preferenceId: id,
-      init_point,
+      preferenceId: response.id,
       qrCode: `data:image/png;base64,${qrCodeBase64}`,
       qrCodeText,
       externalReference: pedidoId,
