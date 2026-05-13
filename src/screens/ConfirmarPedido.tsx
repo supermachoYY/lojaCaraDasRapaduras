@@ -94,7 +94,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     setUsandoPontos(!usandoPontos);
   }
 
-  async function criarPedidoNoFirestore(status: string = "pendente") {
+  async function criarPedidoNoFirestore(status: string = "pendente", paymentIntentId?: string) {
     const pedidosPorVendedor = new Map();
     cart.forEach((item) => {
       const vendedorId = item.userId;
@@ -138,6 +138,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         status: status,
         qrCode: idUnico,
         codigoNumerico,
+        paymentIntentId: paymentIntentId || null,
         avaliado: false,
         criadoEm: new Date(),
       };
@@ -172,9 +173,9 @@ export default function ConfirmarPedido({ route, navigation }: any) {
 
     setProcessandoPix(true);
     try {
-      // Primeiro, cria o pedido no Firestore com status "aguardando_pagamento"
+      // 1. Cria o pedido no Firestore com status "aguardando_pagamento"
       const pedidosCriados = await criarPedidoNoFirestore("aguardando_pagamento");
-      const pedidoId = pedidosCriados[0].id; // extrai o ID do primeiro pedido
+      const pedidoId = pedidosCriados[0].id; // ID do primeiro pedido (como referência)
       const total = calcularTotalComDesconto();
       const itens = cart.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco: i.preco }));
       const email = auth.currentUser.email;
@@ -185,7 +186,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
 
       const apiUrl = 'https://loja-cara-das-rapaduras.vercel.app/api/create-preference';
       console.log("Chamando API:", apiUrl);
-      console.log("Enviando para Vercel:", { total, itens, pedidoId, email });
+      console.log("Dados enviados:", { total, itens, pedidoId, email });
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -206,7 +207,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         navigation.navigate('ExibirQRCode', {
           qrCode: data.qrCode,
           qrCodeText: data.qrCodeText,
-          pedidoId,
+          pedidoId: pedidoId,
         });
       } else {
         throw new Error("Resposta da API não contém QR Code");
