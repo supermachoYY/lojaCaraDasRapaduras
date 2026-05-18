@@ -43,10 +43,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === produto.id);
       if (existingItem) {
-        if (existingItem.quantidade >= 3) {
-          Alert.alert("Limite atingido", "Você pode adicionar no máximo 3 unidades deste produto.");
-          return prevCart;
-        }
         return prevCart.map((item) =>
           item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item
         );
@@ -75,10 +71,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       removerItem(id);
       return;
     }
-    if (novaQuantidade > 3) {
-      Alert.alert("Limite", "Máximo de 3 unidades por produto.");
-      return;
-    }
+    
     setCart((prevCart) =>
       prevCart.map((item) => (item.id === id ? { ...item, quantidade: novaQuantidade } : item))
     );

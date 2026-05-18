@@ -91,30 +91,29 @@ export default function Home({ navigation }: any) {
   }, []);
 
   function filtrarLanches(lista: any[], categoria: string, busca: string) {
-  let resultado = [...lista];
-  if (categoria !== "todos") {
-    if (categoria === "promocao") {
-      resultado = resultado.filter(item => item.promocao === true);
-    } else {
-      resultado = resultado.filter(item => {
-        if (item.categorias && Array.isArray(item.categorias)) {
-          return item.categorias.includes(categoria);
-        } else if (item.categoria) {
-          return item.categoria === categoria;
-        }
-        return false;
-      });
+    let resultado = [...lista];
+    if (categoria !== "todos") {
+      if (categoria === "promocao") {
+        resultado = resultado.filter(item => item.promocao === true);
+      } else {
+        resultado = resultado.filter(item => {
+          if (item.categorias && Array.isArray(item.categorias)) {
+            return item.categorias.includes(categoria);
+          } else if (item.categoria) {
+            return item.categoria === categoria;
+          }
+          return false;
+        });
+      }
     }
+    if (busca.trim() !== "") {
+      resultado = resultado.filter(item =>
+        item.nome.toLowerCase().includes(busca.toLowerCase()) ||
+        item.descricao?.toLowerCase().includes(busca.toLowerCase())
+      );
+    }
+    setFilteredLanches(resultado);
   }
-  if (busca.trim() !== "") {
-    resultado = resultado.filter(item =>
-      item.nome.toLowerCase().includes(busca.toLowerCase()) ||
-      item.descricao?.toLowerCase().includes(busca.toLowerCase())
-    );
-  }
-  setFilteredLanches(resultado);
-}
-
 
   useEffect(() => {
     filtrarLanches(lanches, categoriaSelecionada, searchText);
@@ -126,7 +125,6 @@ export default function Home({ navigation }: any) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Os listeners do Firestore já atualizam os dados automaticamente
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -138,14 +136,15 @@ export default function Home({ navigation }: any) {
       alert("Erro ao sair");
     }
   };
+
   function getCategoriaIcon(cat: string) {
-  switch(cat) {
-    case "lanche": return "🍔 Salgado";
-    case "bebida": return "🥤 Bebida";
-    case "doce": return "🍰 Doce";
-    default: return cat;
+    switch(cat) {
+      case "lanche": return "🍔 Salgado";
+      case "bebida": return "🥤 Bebida";
+      case "doce": return "🍰 Doce";
+      default: return cat;
+    }
   }
-}
 
   if (loading) {
     return (
@@ -187,6 +186,7 @@ export default function Home({ navigation }: any) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#FF6B6B"]} />
         }
       >
+        {/* Categorias */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriasContainer}>
           {categorias.map((cat) => (
             <TouchableOpacity key={cat.id} style={styles.categoriaItem} onPress={() => filtrarPorCategoria(cat.id)}>
@@ -205,6 +205,7 @@ export default function Home({ navigation }: any) {
           ))}
         </ScrollView>
 
+        {/* Favoritos */}
         {lanchesFavoritos.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -227,6 +228,7 @@ export default function Home({ navigation }: any) {
           </View>
         )}
 
+        {/* Promoções */}
         {(categoriaSelecionada === "todos" || categoriaSelecionada === "promocao") && promocoes.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -255,6 +257,7 @@ export default function Home({ navigation }: any) {
           </View>
         )}
 
+        {/* Listagem principal */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
@@ -275,21 +278,32 @@ export default function Home({ navigation }: any) {
             </View>
           ) : (
             filteredLanches.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.lancheCard} onPress={() => navigation.navigate("Produto", { produto: item })}>
+              <TouchableOpacity
+                key={item.id}
+                style={styles.lancheCard}
+                onPress={() => navigation.navigate("Produto", { produto: item })}
+              >
                 <Image source={{ uri: item.imagem }} style={styles.lancheImage} />
                 <View style={styles.lancheInfo}>
                   <Text style={styles.lancheNome}>{item.nome}</Text>
                   <Text style={styles.lancheDescricao} numberOfLines={2}>{item.descricao}</Text>
-                  <View style={styles.categoriaBadge}>
-               <Text style={styles.categoriaBadgeText}>
-              {item.categorias ? item.categorias.map(c => getCategoriaIcon(c)).join(' | ') : (item.categoria === "lanche" ? "🍔 Salgado" : item.categoria === "bebida" ? "🥤 Bebida" : "🍰 Doce")}
-                </Text>
 
+                  <View style={styles.categoriaBadge}>
+                    <Text style={styles.categoriaBadgeText}>
+                      {item.categorias ? item.categorias.map(c => getCategoriaIcon(c)).join(' | ') : (item.categoria === "lanche" ? "🍔 Salgado" : item.categoria === "bebida" ? "🥤 Bebida" : "🍰 Doce")}
+                    </Text>
                   </View>
+
+                  {/* Exibição correta da avaliação média (sem fallback fixo) */}
                   <View style={styles.ratingContainer}>
-                    <Text style={styles.rating}>⭐ {(item.mediaAvaliacao || 4.5).toFixed(1)}</Text>
-                    <Text style={styles.ratingCount}>({item.totalAvaliacoes || 0} avaliações)</Text>
+                    <Text style={styles.rating}>
+                      ⭐ {(item.mediaAvaliacao || 0).toFixed(1)}
+                    </Text>
+                    <Text style={styles.ratingCount}>
+                      ({item.totalAvaliacoes || 0} {item.totalAvaliacoes === 1 ? "avaliação" : "avaliações"})
+                    </Text>
                   </View>
+
                   <View style={styles.priceRow}>
                     {item.promocao ? (
                       <>
@@ -313,6 +327,7 @@ export default function Home({ navigation }: any) {
         </View>
       </ScrollView>
 
+      {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Home")}>
           <Text style={[styles.navIcon, styles.navActive]}>🏠</Text>
@@ -323,8 +338,8 @@ export default function Home({ navigation }: any) {
           <Text style={styles.navText}>Carrinho</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("MeusPedidos")}>
-        <Text style={styles.navIcon}>📋</Text>
-        <Text style={styles.navText}>Pedidos</Text>
+          <Text style={styles.navIcon}>📋</Text>
+          <Text style={styles.navText}>Pedidos</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate("Perfil")}>
           <Text style={styles.navIcon}>👤</Text>

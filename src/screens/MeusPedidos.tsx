@@ -23,6 +23,7 @@ export default function MeusPedidos({ navigation }: any) {
       const q = query(
         collection(db, "pedidos"),
         where("compradorId", "==", auth.currentUser.uid),
+        where("status", "not-in", ["aguardando_pagamento"]),
         orderBy("criadoEm", "desc")
       );
       const snapshot = await getDocs(q);

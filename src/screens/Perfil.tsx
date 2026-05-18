@@ -16,6 +16,8 @@ import { auth, db } from "../database/database";
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, deleteDoc, orderBy } from "firebase/firestore";
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, signOut, updateProfile } from "firebase/auth";
 import * as ImagePicker from "expo-image-picker";
+import { IMGBB_API_KEY } from '@env';
+import Constants from 'expo-constants';
 
 export default function Perfil({ navigation }: any) {
   const [userData, setUserData] = useState<any>({});
@@ -40,8 +42,7 @@ export default function Perfil({ navigation }: any) {
     lucroEstimado: 0,
   });
 
-  const IMGBB_API_KEY = "14ec2963cb8fc44320d0674c7be38801";
-
+const IMGBB_API_KEY = Constants.expoConfig?.extra?.imgbbApiKey;
   useEffect(() => {
     carregarDadosUsuario();
     if (userData.papel === "admin") {

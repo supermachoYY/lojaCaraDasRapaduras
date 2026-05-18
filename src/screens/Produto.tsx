@@ -80,12 +80,8 @@ export default function Produto({ route, navigation }: any) {
   }
 
   function incrementar() {
-    const limiteMaximo = 3;
     const limiteEstoque = produto.quantidadeDisponivel || 999;
-    if (quantidade >= limiteMaximo) {
-      Alert.alert("Limite atingido", "Máximo 3 unidades por pedido");
-      return;
-    }
+    
     if (quantidade >= limiteEstoque) {
       Alert.alert("Estoque insuficiente", `Apenas ${limiteEstoque} disponíveis`);
       return;

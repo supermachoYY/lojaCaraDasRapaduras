@@ -15,6 +15,8 @@ import { collection, addDoc, doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../database/database";
 import * as ImagePicker from "expo-image-picker";
 import Checkbox from "expo-checkbox";
+import { IMGBB_API_KEY } from '@env';
+import Constants from 'expo-constants';
 
 export default function CriarLanche({ navigation }: any) {
   const [nome, setNome] = useState("");
@@ -32,7 +34,7 @@ export default function CriarLanche({ navigation }: any) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [permissaoVerificada, setPermissaoVerificada] = useState(false);
 
-  const IMGBB_API_KEY = "14ec2963cb8fc44320d0674c7be38801";
+const IMGBB_API_KEY = Constants.expoConfig?.extra?.imgbbApiKey;
 
   const opcoesCategorias = [
     { id: "lanche", label: "🍔 Salgado", cor: "#FF6B6B" },
