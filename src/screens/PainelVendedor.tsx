@@ -17,9 +17,6 @@ import { collection, getDocs, deleteDoc, doc, query, where } from "firebase/fire
 import { db, auth } from "../database/database";
 import { getDoc } from "firebase/firestore";
 
-// Se você usa EMPRESA_ID fixo, defina aqui (opcional)
-// const EMPRESA_ID = "lanchonete_cliente";
-
 export default function PainelVendedor({ navigation }: any) {
   const [lanches, setLanches] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,8 +62,6 @@ export default function PainelVendedor({ navigation }: any) {
         setError("Usuário não autenticado");
         return;
       }
-      // Se estiver usando EMPRESA_ID, adicione o filtro:
-      // const q = query(collection(db, "lanches"), where("userId", "==", user.uid), where("empresaId", "==", EMPRESA_ID));
       const q = query(collection(db, "lanches"), where("userId", "==", user.uid));
       const snapshot = await getDocs(q);
       const lista = snapshot.docs.map(docItem => ({ id: docItem.id, ...docItem.data() }));
@@ -200,6 +195,10 @@ export default function PainelVendedor({ navigation }: any) {
           <TouchableOpacity style={styles.botaoGrafico} onPress={() => navigation.navigate("GraficoVendas")}>
             <Text style={styles.botaoTexto}>📊 Gráfico de vendas</Text>
           </TouchableOpacity>
+          {/* NOVO BOTÃO: CONFIGURAR ENTREGA */}
+          <TouchableOpacity style={styles.botaoConfigurarEntrega} onPress={() => navigation.navigate("ConfigurarEntrega")}>
+            <Text style={styles.botaoTexto}>🚚 Configurar entrega</Text>
+          </TouchableOpacity>
         </View>
 
         {lanches.length === 0 ? (
@@ -232,8 +231,6 @@ export default function PainelVendedor({ navigation }: any) {
   );
 }
 
-
-
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f8f8f8" },
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
@@ -244,11 +241,18 @@ const styles = StyleSheet.create({
   addButtonHeader: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FF6B6B", justifyContent: "center", alignItems: "center" },
   addButtonHeaderText: { fontSize: 24, color: "#fff", fontWeight: "bold" },
 
-  buttonGroup: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20, gap: 12 },
-  botaoPedidos: { flex: 1, backgroundColor: "#4ECDC4", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  buttonGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 20,
+    gap: 12
+  },
+  botaoPedidos: { flex: 1, minWidth: "45%", backgroundColor: "#4ECDC4", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
   botaoPedidosTexto: { color: "#fff", fontWeight: "bold", fontSize: 14 },
-  botaoLerQR: { flex: 1, backgroundColor: "#FF6B6B", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
-  botaoGrafico: { flex: 1, backgroundColor: "#9b59b6", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  botaoLerQR: { flex: 1, minWidth: "45%", backgroundColor: "#FF6B6B", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  botaoGrafico: { flex: 1, minWidth: "45%", backgroundColor: "#9b59b6", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  botaoConfigurarEntrega: { flex: 1, minWidth: "45%", backgroundColor: "#f39c12", paddingVertical: 12, borderRadius: 12, alignItems: "center" },
   botaoTexto: { color: "#fff", fontWeight: "bold", fontSize: 14 },
 
   categoriaContainer: { marginBottom: 24 },

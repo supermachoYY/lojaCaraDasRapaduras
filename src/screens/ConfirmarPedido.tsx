@@ -13,8 +13,27 @@ import { CartContext } from "../services/CartContext";
 import { auth, db } from "../database/database";
 import { collection, addDoc, doc, getDoc, updateDoc, increment } from "firebase/firestore";
 
+// Função para calcular distância entre dois pontos (Haversine formula)
+function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Raio da Terra em km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distancia = R * c;
+  // Arredondar para 2 casas decimais
+  return Math.round(distancia * 100) / 100;
+}
+
 export default function ConfirmarPedido({ route, navigation }: any) {
+  // Recebe os dados da tela de endereço
   const dataRecebida = route.params?.dataRetirada;
+  const entregaTipo = route.params?.entregaTipo || "retirada";
+  const enderecoEntrega = route.params?.endereco || null;
+
   const { cart, limparCarrinho } = useContext(CartContext);
   const [loading, setLoading] = useState(false);
   const [metodoPagamento, setMetodoPagamento] = useState<string>("presencial");
@@ -23,9 +42,13 @@ export default function ConfirmarPedido({ route, navigation }: any) {
   const [usandoPontos, setUsandoPontos] = useState(false);
   const [pontosParaUsar, setPontosParaUsar] = useState(0);
   const [processandoPix, setProcessandoPix] = useState(false);
+  const [taxaEntrega, setTaxaEntrega] = useState(0);
+  const [vendedorConfig, setVendedorConfig] = useState<any>(null);
+  const [distancia, setDistancia] = useState(0);
 
   useEffect(() => {
     carregarDadosUsuario();
+    carregarConfiguracaoVendedor();
   }, []);
 
   async function carregarDadosUsuario() {
@@ -40,6 +63,42 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     } catch (error) {
       console.log(error);
     }
+  }
+
+  async function carregarConfiguracaoVendedor() {
+    // Buscar a configuração do vendedor (ponto de partida e valor por km)
+    if (cart.length === 0) return;
+    const vendedorId = cart[0].userId;
+    if (!vendedorId) return;
+
+    try {
+      const configRef = doc(db, "configuracoes_entrega", vendedorId);
+      const configSnap = await getDoc(configRef);
+      if (configSnap.exists()) {
+        const config = configSnap.data();
+        setVendedorConfig(config);
+        // Se for entrega, calcular o frete
+        if (entregaTipo === "entrega" && enderecoEntrega && config.pontoPartida) {
+          calcularFrete(config);
+        }
+      }
+    } catch (error) {
+      console.log("Erro ao carregar configuração do vendedor:", error);
+    }
+  }
+
+  function calcularFrete(config: any) {
+    // Calcular distância real entre o ponto do vendedor e o endereço do comprador
+    const dist = calcularDistancia(
+      config.pontoPartida.latitude,
+      config.pontoPartida.longitude,
+      enderecoEntrega.latitude,
+      enderecoEntrega.longitude
+    );
+    setDistancia(dist);
+    const valorPorKm = config.valorPorKm || 2;
+    const frete = dist * valorPorKm;
+    setTaxaEntrega(frete);
   }
 
   function gerarCodigoNumerico() {
@@ -79,6 +138,10 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     return calcularTotal() - calcularDescontoPorPontos();
   }
 
+  function calcularTotalFinal() {
+    return calcularTotalComDesconto() + taxaEntrega;
+  }
+
   function toggleUsarPontos() {
     if (pontosUsuario === 0) {
       Alert.alert("Sem Pontos", "Você ainda não tem pontos para usar.");
@@ -113,6 +176,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
     const totalComDesconto = calcularTotalComDesconto();
     const pontosGanhos = calcularPontosGanhos();
     const codigoNumerico = gerarCodigoNumerico();
+    const totalFinal = calcularTotalFinal();
 
     for (const [vendedorId, itens] of pedidosPorVendedor) {
       const idUnico = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
@@ -130,7 +194,9 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         })),
         subtotal: itens.reduce((sum, item) => sum + item.preco * item.quantidade, 0),
         descontoPontos: descontoPontos / pedidosPorVendedor.size,
-        total: (itens.reduce((sum, item) => sum + item.preco * item.quantidade, 0)) - (descontoPontos / pedidosPorVendedor.size),
+        taxaEntrega: taxaEntrega / pedidosPorVendedor.size,
+        distancia: distancia / pedidosPorVendedor.size,
+        total: totalFinal / pedidosPorVendedor.size,
         dataRetirada,
         metodoPagamento,
         pontosGanhos,
@@ -139,6 +205,8 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         qrCode: idUnico,
         codigoNumerico,
         paymentIntentId: paymentIntentId || null,
+        entregaTipo,
+        enderecoEntrega: enderecoEntrega || null,
         avaliado: false,
         criadoEm: new Date(),
       };
@@ -173,10 +241,9 @@ export default function ConfirmarPedido({ route, navigation }: any) {
 
     setProcessandoPix(true);
     try {
-      // 1. Cria o pedido no Firestore com status "aguardando_pagamento"
       const pedidosCriados = await criarPedidoNoFirestore("aguardando_pagamento");
-      const pedidoId = pedidosCriados[0].id; // ID do primeiro pedido (como referência)
-      const total = calcularTotalComDesconto();
+      const pedidoId = pedidosCriados[0].id;
+      const total = calcularTotalFinal();
       const itens = cart.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco: i.preco }));
       const email = auth.currentUser.email;
 
@@ -271,6 +338,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
   const TOTAL = calcularTotal();
   const DESCONTO_PONTOS = calcularDescontoPorPontos();
   const TOTAL_COM_DESCONTO = calcularTotalComDesconto();
+  const TOTAL_FINAL = calcularTotalFinal();
   const PONTOS_GANHOS = calcularPontosGanhos();
   const dataRetiradaObj = calcularDataRetirada();
 
@@ -310,6 +378,29 @@ export default function ConfirmarPedido({ route, navigation }: any) {
             <Text style={styles.localRetiradaText}>📍 {item.localRetirada || "Local não informado"}</Text>
           </View>
         ))}
+      </View>
+
+      {/* Tipo de entrega */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>🚚 Entrega</Text>
+        <View style={styles.infoCard}>
+          <Text style={styles.tipoEntrega}>
+            {entregaTipo === "retirada" ? "📍 Retirar com o vendedor" : "🚚 Receber em casa"}
+          </Text>
+          {entregaTipo === "entrega" && enderecoEntrega && (
+            <>
+              <Text style={styles.enderecoTexto}>
+                📍 {enderecoEntrega.texto || "Endereço selecionado no mapa"}
+              </Text>
+              {distancia > 0 && (
+                <Text style={styles.distanciaTexto}>📏 Distância: {distancia.toFixed(2)} km</Text>
+              )}
+            </>
+          )}
+          {taxaEntrega > 0 && (
+            <Text style={styles.freteTexto}>🚚 Taxa de entrega: R$ {taxaEntrega.toFixed(2)}</Text>
+          )}
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -369,9 +460,17 @@ export default function ConfirmarPedido({ route, navigation }: any) {
         <View style={styles.resumoCard}>
           <View style={styles.resumoRow}><Text style={styles.resumoLabel}>Subtotal</Text><Text style={styles.resumoValue}>R$ {TOTAL.toFixed(2)}</Text></View>
           {DESCONTO_PONTOS > 0 && <View style={styles.resumoRow}><Text style={styles.resumoLabelDesconto}>Desconto por pontos</Text><Text style={styles.resumoValueDesconto}>- R$ {DESCONTO_PONTOS.toFixed(2)}</Text></View>}
-          <View style={styles.resumoRow}><Text style={styles.resumoLabel}>Taxa de entrega</Text><Text style={styles.resumoValueGratis}>Grátis</Text></View>
+          {taxaEntrega > 0 && (
+            <View style={styles.resumoRow}>
+              <Text style={styles.resumoLabel}>Taxa de entrega</Text>
+              <Text style={styles.resumoValue}>R$ {taxaEntrega.toFixed(2)}</Text>
+            </View>
+          )}
           <View style={styles.divisor} />
-          <View style={styles.resumoTotal}><Text style={styles.totalLabel}>TOTAL</Text><Text style={styles.totalValue}>R$ {TOTAL_COM_DESCONTO.toFixed(2)}</Text></View>
+          <View style={styles.resumoTotal}>
+            <Text style={styles.totalLabel}>TOTAL</Text>
+            <Text style={styles.totalValue}>R$ {TOTAL_FINAL.toFixed(2)}</Text>
+          </View>
         </View>
       </View>
 
@@ -388,7 +487,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
           onPress={pagarComPIX}
           disabled={processandoPix}
         >
-          {processandoPix ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoFinalizarTexto}>Pagar com PIX • R$ {TOTAL_COM_DESCONTO.toFixed(2)}</Text>}
+          {processandoPix ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoFinalizarTexto}>Pagar com PIX • R$ {TOTAL_FINAL.toFixed(2)}</Text>}
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
@@ -396,7 +495,7 @@ export default function ConfirmarPedido({ route, navigation }: any) {
           onPress={finalizarPedidoPresencial}
           disabled={loading}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoFinalizarTexto}>Confirmar Pedido • R$ {TOTAL_COM_DESCONTO.toFixed(2)}</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoFinalizarTexto}>Confirmar Pedido • R$ {TOTAL_FINAL.toFixed(2)}</Text>}
         </TouchableOpacity>
       )}
     </ScrollView>
@@ -417,6 +516,10 @@ const styles = StyleSheet.create({
   orderItemName: { fontSize: 16, color: "#333" },
   orderItemPrice: { fontSize: 16, fontWeight: "500", color: "#333", marginTop: 4 },
   localRetiradaText: { fontSize: 12, color: "#666", marginTop: 4, fontStyle: "italic" },
+  tipoEntrega: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
+  enderecoTexto: { fontSize: 14, color: "#666", marginBottom: 4 },
+  distanciaTexto: { fontSize: 12, color: "#666", marginBottom: 4 },
+  freteTexto: { fontSize: 14, color: "#FF6B6B", fontWeight: "bold", marginTop: 8 },
   fidelidadeCard: { flexDirection: "row", backgroundColor: "#FFF3E0", borderRadius: 12, padding: 15 },
   fidelidadeIcon: { fontSize: 32, marginRight: 15 },
   fidelidadeInfo: { flex: 1 },
@@ -445,7 +548,6 @@ const styles = StyleSheet.create({
   resumoValue: { fontSize: 14, fontWeight: "500", color: "#333" },
   resumoLabelDesconto: { fontSize: 14, color: "#27ae60" },
   resumoValueDesconto: { fontSize: 14, fontWeight: "500", color: "#27ae60" },
-  resumoValueGratis: { fontSize: 14, fontWeight: "500", color: "#27ae60" },
   divisor: { height: 1, backgroundColor: "#ddd", marginVertical: 10 },
   resumoTotal: { flexDirection: "row", justifyContent: "space-between", marginTop: 5 },
   totalLabel: { fontSize: 18, fontWeight: "bold", color: "#333" },

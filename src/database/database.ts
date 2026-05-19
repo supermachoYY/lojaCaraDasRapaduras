@@ -3,13 +3,22 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+import {
+  FIREBASE_API_KEY,
+  FIREBASE_AUTH_DOMAIN,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  FIREBASE_MESSAGING_SENDER_ID,
+  FIREBASE_APP_ID
+} from '@env';
+
 const firebaseConfig = {
- apiKey: "AIzaSyCEjBd8vj_OwV5K2XorGF0UqrNgRPfrk2M",
-  authDomain: "appcaradasrapaduras.firebaseapp.com",
-  projectId: "appcaradasrapaduras",
-  storageBucket: "appcaradasrapaduras.firebasestorage.app",
-  messagingSenderId: "467660364774",
-  appId: "1:467660364774:web:ff37f406d9e1db3cf39427"
+  apiKey: FIREBASE_API_KEY,
+  authDomain: FIREBASE_AUTH_DOMAIN,
+  projectId: FIREBASE_PROJECT_ID,
+  storageBucket: FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
+  appId: FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);

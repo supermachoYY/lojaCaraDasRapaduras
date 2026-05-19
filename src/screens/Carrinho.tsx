@@ -28,7 +28,7 @@ export default function Carrinho({ navigation }: any) {
     return data;
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
+
   const TAXA_ENTREGA = 0;
   const DESCONTO_MAXIMO = 5;
 
@@ -78,7 +78,11 @@ export default function Carrinho({ navigation }: any) {
       Alert.alert("Carrinho Vazio", "Adicione itens ao carrinho antes de finalizar");
       return;
     }
-    navigation.navigate("ConfirmarPedido", { dataRetirada });
+    // Navegar para a tela de endereço de entrega
+    navigation.navigate("EnderecoEntrega", {
+      cartTotal: total,
+      dataRetirada
+    });
   }
 
   function renderItem({ item }: any) {
@@ -94,7 +98,10 @@ export default function Carrinho({ navigation }: any) {
               <Text style={styles.quantityButtonText}>-</Text>
             </TouchableOpacity>
             <Text style={styles.quantityText}>{item.quantidade}</Text>
-            <TouchableOpacity style={[styles.quantityButton, item.quantidade >= 3 && styles.disabledButton]} onPress={() => atualizarQuantidade(item.id, item.quantidade + 1)} disabled={item.quantidade >= 3}>
+            <TouchableOpacity
+              style={styles.quantityButton}
+              onPress={() => atualizarQuantidade(item.id, item.quantidade + 1)}
+            >
               <Text style={styles.quantityButtonText}>+</Text>
             </TouchableOpacity>
           </View>
@@ -141,14 +148,14 @@ export default function Carrinho({ navigation }: any) {
 
       <View style={styles.resumoContainer}>
         <Text style={styles.resumoTitulo}>Resumo do pedido</Text>
-        
+
         <View style={styles.resumoRow}>
           <Text style={styles.resumoLabel}>Subtotal</Text>
           <Text style={styles.resumoValue}>R$ {subtotal.toFixed(2)}</Text>
         </View>
         <View style={styles.resumoRow}>
           <Text style={styles.resumoLabel}>Taxa de entrega</Text>
-          <Text style={styles.resumoValueGratis}>Grátis (retirada no campus)</Text>
+          <Text style={styles.resumoValueGratis}>A definir</Text>
         </View>
         {subtotal > 0 && (
           <View style={styles.resumoRow}>
@@ -156,11 +163,11 @@ export default function Carrinho({ navigation }: any) {
             <Text style={styles.resumoDesconto}>- R$ {aplicarDescontoFidelidade(0).toFixed(2)}</Text>
           </View>
         )}
-        
+
         <TouchableOpacity style={styles.dataButton} onPress={() => setShowDatePicker(true)}>
           <Text style={styles.dataButtonText}>📅 Data de retirada: {formatarData(dataRetirada)}</Text>
         </TouchableOpacity>
-        
+
         {showDatePicker && (
           <DateTimePicker
             value={dataRetirada}
@@ -170,18 +177,17 @@ export default function Carrinho({ navigation }: any) {
             minimumDate={new Date()}
           />
         )}
-        
+
         <View style={styles.divisor} />
         <View style={styles.resumoTotal}>
           <Text style={styles.totalLabel}>TOTAL</Text>
           <Text style={styles.totalValue}>R$ {total.toFixed(2)}</Text>
         </View>
         <View style={styles.avisosContainer}>
-          <Text style={styles.aviso}>⚠️ Limite de 3 unidades por produto</Text>
-          <Text style={styles.aviso}>📍 Retirada: confirme com o vendedor</Text>
+          <Text style={styles.aviso}>📍 Entrega ou retirada será definida na próxima tela</Text>
         </View>
         <TouchableOpacity style={styles.botaoFinalizar} onPress={finalizarPedido}>
-          <Text style={styles.botaoFinalizarTexto}>Finalizar Pedido • R$ {total.toFixed(2)}</Text>
+          <Text style={styles.botaoFinalizarTexto}>Continuar • R$ {total.toFixed(2)}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -204,7 +210,6 @@ const styles = StyleSheet.create({
   quantityContainer: { flexDirection: "row", alignItems: "center" },
   quantityButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#FF6B6B20", justifyContent: "center", alignItems: "center" },
   quantityButtonText: { fontSize: 20, fontWeight: "bold", color: "#FF6B6B" },
-  disabledButton: { opacity: 0.3 },
   quantityText: { fontSize: 16, fontWeight: "bold", marginHorizontal: 15, color: "#333" },
   itemTotalContainer: { alignItems: "flex-end", justifyContent: "space-between" },
   itemTotal: { fontSize: 16, fontWeight: "bold", color: "#FF6B6B", marginBottom: 10 },
