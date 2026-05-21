@@ -8,15 +8,16 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-        "extra": {
-      "imgbbApiKey": "870eee606ac8b80175e62afc7c4a9049"
+    "extra": {
+      "eas": {
+        "projectId": "220c8541-348c-4006-9008-74af59054c75"
+      }
     },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.allanches.app"
@@ -33,14 +34,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "220c8541-348c-4006-9008-74af59054c75"
-      }
-    },
     "plugins": [
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
